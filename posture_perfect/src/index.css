@@ -5,6 +5,10 @@ body {
 }
 canvas {
   border: 1px solid black;
+  display: inline-block;
+}
+video {
+	display: inline-block;
 }
 .invisible {
   display: none;

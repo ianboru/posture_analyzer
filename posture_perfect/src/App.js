@@ -4,8 +4,6 @@ import './App.css';
 import cv from 'opencv.js';
 
 
-
-
 class App extends Component {
 
   state = {
@@ -98,15 +96,28 @@ stopVideoProcessing = () =>{
 }
   processVideo=()=> {
     let canvasInputCtx = this.state.canvasInputCtx
+    let canvasOutputCtx = this.state.canvasOutputCtx
     let videoWidth = this.state.videoWidth
     let videoHeight = this.state.videoHeight
+
     canvasInputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
     let imageData = canvasInputCtx.getImageData(0, 0, videoWidth, videoHeight);
     this.state.srcMat.data.set(imageData.data);
     cv.cvtColor(this.state.srcMat, this.state.grayMat, cv.COLOR_RGBA2GRAY);
+    cv.threshold(this.state.grayMat, this.state.grayMat, 120, 200, cv.THRESH_BINARY);
     this.state.canvasOutputCtx.drawImage(this.state.canvasInput, 0, 0, videoWidth, videoHeight);
-    console.log(this.state)
+    let tempMat = new cv.Mat(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC1);
+
+    cv.flip(this.state.grayMat, tempMat,1)
     cv.imshow("canvasOutput", this.state.grayMat);
+
+    cv.subtract(tempMat, this.state.grayMat, tempMat)
+    let canvasAsymCtx = this.canvasASym.getContext("2d")
+    
+    cv.imshow("canvasAsym", tempMat);
+    canvasAsymCtx.lineWidth = 6;
+    canvasAsymCtx.strokeStyle = "blue";
+    canvasAsymCtx.strokeRect(Math.floor(videoWidth/2), 0, 15, videoHeight);
     requestAnimationFrame(this.processVideo);
   }
   stopCamera=()=> {
@@ -135,7 +146,6 @@ stopVideoProcessing = () =>{
     // schedule first one.
     return (
       <div className="App">
-        <video ref={ref => this.video = ref}></video>
         <header className="App-header">
           <img src={logo} className="App-logo" alt="logo" />
           <h1 className="App-title">Welcome to React</h1>
@@ -148,7 +158,12 @@ stopVideoProcessing = () =>{
        
          <div id="container">
             <h3>OUTPUT</h3>
+            <video ref={ref => this.video = ref}></video>
+
             <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
+            ASYM
+            <canvas ref={ref => this.canvasASym = ref}  className="center-block" id="canvasAsym" width={320} height={240}></canvas>
+
           </div>
           <div className="invisible">
             <video id="video" className="hidden">Your browser does not support the video tag.</video>
