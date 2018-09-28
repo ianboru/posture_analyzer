@@ -2,8 +2,9 @@ import React, { Component } from 'react';
 import logo from './logo.svg';
 import './App.css';
 import cv from 'opencv.js';
+import * as tf from '@tensorflow/tfjs';
 
-
+import * as posenet from '@tensorflow-models/posenet';
 class App extends Component {
 
   state = {
@@ -22,9 +23,18 @@ class App extends Component {
     videoHeight : null,
     videoWidth : null,
     srcMat : null,
-    grayMat : null
+    grayMat : null,
+    net : null,
+    startTime : Date.now(),
   }
+  componentDidMount=()=>{
+    posenet.load().then(data=>{
+       this.setState({
+          net : data
+        })
 
+    });
+  }
   startCamera=()=> {
     let that = this
     if (this.state.streaming) return;
@@ -86,39 +96,91 @@ class App extends Component {
       srcMat,
       grayMat
     })
+
     requestAnimationFrame(this.processVideo);
   }
 
-stopVideoProcessing = () =>{
-  let src = this.state.src
-  if (src != null && !src.isDeleted()) src.delete();
+  stopVideoProcessing = () =>{
+    let src = this.state.src
+    if (src != null && !src.isDeleted()) src.delete();
 
-}
+  }
+
+  drawCrossBodyLines = (context,keypointPositions)=>{
+    let connectParts = ["Ear","Hip","Shoulder"]
+    connectParts.forEach((part)=>{
+      if(keypointPositions["left"+part] && keypointPositions["right"+part] ){
+        context.beginPath()
+        context.moveTo(keypointPositions["left"+part].x,keypointPositions["left"+part].y)
+        context.lineTo(keypointPositions["right"+part].x,keypointPositions["right"+part].y)
+        context.stroke(); 
+      }
+    })
+  }
   processVideo=()=> {
+    
+    if(this.state.net){
+      var imageScaleFactor = 0.5;
+      var outputStride = 16;
+      var flipHorizontal = true;
+        this.state.net.estimateSinglePose(this.video,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
+          this.setState({
+            pose
+          })
+        });
+    }
     let canvasInputCtx = this.state.canvasInputCtx
-    let canvasOutputCtx = this.state.canvasOutputCtx
+    let canvasOutputCtx = this.canvasOutput.getContext("2d")
     let videoWidth = this.state.videoWidth
     let videoHeight = this.state.videoHeight
 
     canvasInputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
     let imageData = canvasInputCtx.getImageData(0, 0, videoWidth, videoHeight);
     this.state.srcMat.data.set(imageData.data);
+
+    cv.flip(this.state.srcMat, this.state.srcMat,1)
     cv.cvtColor(this.state.srcMat, this.state.grayMat, cv.COLOR_RGBA2GRAY);
-    cv.threshold(this.state.grayMat, this.state.grayMat, 120, 200, cv.THRESH_BINARY);
+    cv.threshold(this.state.grayMat, this.state.grayMat, 100, 200, cv.THRESH_BINARY);
     this.state.canvasOutputCtx.drawImage(this.state.canvasInput, 0, 0, videoWidth, videoHeight);
     let tempMat = new cv.Mat(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC1);
-
+    
     cv.flip(this.state.grayMat, tempMat,1)
-    cv.imshow("canvasOutput", this.state.grayMat);
+    cv.imshow("canvasOutput", this.state.srcMat);
+    canvasOutputCtx.lineWidth = 6;
+    canvasOutputCtx.strokeStyle = 'rgba(0,255,0,0.5)';
+    canvasOutputCtx.strokeRect(Math.floor(videoWidth/2), 0, 15, videoHeight);
+    let keypointPositions = {}
+    if(this.state.pose){
+      let boxSize = 15
+      this.state.pose.keypoints.forEach((keypoint,index)=>{
+        if(keypoint.score > .35){
 
-    cv.subtract(tempMat, this.state.grayMat, tempMat)
+          keypointPositions[keypoint.part] = keypoint.position
+
+          canvasOutputCtx.strokeRect(keypoint.position.x - boxSize/2 , keypoint.position.y - boxSize/2, boxSize, boxSize);
+        }
+      })
+
+      this.drawCrossBodyLines(canvasOutputCtx, keypointPositions)
+    }
+
+    /*cv.subtract(tempMat, this.state.grayMat, tempMat)
     let canvasAsymCtx = this.canvasASym.getContext("2d")
     
     cv.imshow("canvasAsym", tempMat);
     canvasAsymCtx.lineWidth = 6;
-    canvasAsymCtx.strokeStyle = "blue";
-    canvasAsymCtx.strokeRect(Math.floor(videoWidth/2), 0, 15, videoHeight);
-    requestAnimationFrame(this.processVideo);
+    canvasAsymCtx.strokeStyle = 'rgba(0,255,0,0.5)';
+    canvasAsymCtx.strokeRect(Math.floor(videoWidth/2), 0, 15, videoHeight);*/
+    var fps = 24;
+    var interval = 1000/fps;
+    const delta = Date.now() - this.state.startTime;;
+      
+    if (delta > interval) {
+      requestAnimationFrame(this.processVideo);
+      this.setState({
+        startTime : Date.now()
+      })
+    }
   }
   stopCamera=()=> {
     if (!this.state.streaming) return;
@@ -158,7 +220,7 @@ stopVideoProcessing = () =>{
        
          <div id="container">
             <h3>OUTPUT</h3>
-            <video ref={ref => this.video = ref}></video>
+            <video className="invisible" ref={ref => this.video = ref}></video>
 
             <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
             ASYM
