@@ -105,11 +105,37 @@ class App extends Component {
     if (src != null && !src.isDeleted()) src.delete();
 
   }
+  getAngleDeg = (ax,ay,bx,by)=> {
+    var angleRad = Math.atan((ay-by)/(ax-bx));
+    var angleDeg = angleRad * 180 / Math.PI;
+    
+    return angleDeg;
+  }
+  hslColPercent = (percent, start, end)=>{
+    var a = percent / 100,
+        b = (end - start) * a,
+        c = b + start;
 
+    // Return a CSS HSL string
+    return 'hsl('+c+', 100%, 50%)';
+  }
   drawCrossBodyLines = (context,keypointPositions)=>{
-    let connectParts = ["Ear","Hip","Shoulder"]
+    let connectParts = ["Ear","Hip","Shoulder","Eye"]
+    
+    context.lineWidth = 3;
+
     connectParts.forEach((part)=>{
       if(keypointPositions["left"+part] && keypointPositions["right"+part] ){
+        let xFrom = keypointPositions["left"+part].x
+        let yFrom = keypointPositions["left"+part].y
+        let xTo = keypointPositions["right"+part].x
+        let yTo = keypointPositions["right"+part].y
+        const angle = this.getAngleDeg(xFrom,yFrom,xTo,yTo)
+        const anglePercent = 100- 100*(Math.min(Math.abs(angle),10)/10)
+
+        var hue = Math.floor((100 - anglePercent) * 120 / 100);  // go from green to red
+        var saturation = Math.abs(anglePercent - 50)/50; 
+        context.strokeStyle = this.hslColPercent(anglePercent,0,120);
         context.beginPath()
         context.moveTo(keypointPositions["left"+part].x,keypointPositions["left"+part].y)
         context.lineTo(keypointPositions["right"+part].x,keypointPositions["right"+part].y)
@@ -117,8 +143,25 @@ class App extends Component {
       }
     })
   }
-  processVideo=()=> {
+  drawGrid = (context) =>{
+    const gridSpacing = 40
+    context.lineWidth = 2;
+    context.strokeStyle = 'rgba(255,255,255,0.2)';
     
+    for (let i = 0; i < Math.floor(this.state.videoWidth/gridSpacing);i++){
+      context.beginPath()
+      context.moveTo(40*(i-1),0)
+      context.lineTo(40*(i-1),this.state.videoHeight)
+      context.stroke(); 
+    }
+    for (let i = 0; i < Math.floor(this.state.videoHeight/gridSpacing);i++ ){
+      context.beginPath()
+      context.moveTo(0,40*(i-1))
+      context.lineTo(this.state.videoWidth,40*(i-1))
+      context.stroke(); 
+    }
+  }
+  processVideo=()=> {
     if(this.state.net){
       var imageScaleFactor = 0.5;
       var outputStride = 16;
@@ -131,6 +174,7 @@ class App extends Component {
     }
     let canvasInputCtx = this.state.canvasInputCtx
     let canvasOutputCtx = this.canvasOutput.getContext("2d")
+
     let videoWidth = this.state.videoWidth
     let videoHeight = this.state.videoHeight
 
@@ -146,25 +190,27 @@ class App extends Component {
     
     cv.flip(this.state.grayMat, tempMat,1)
     cv.imshow("canvasOutput", this.state.srcMat);
-    canvasOutputCtx.lineWidth = 6;
+    /*
     canvasOutputCtx.strokeStyle = 'rgba(0,255,0,0.5)';
-    canvasOutputCtx.strokeRect(Math.floor(videoWidth/2), 0, 15, videoHeight);
+    canvasOutputCtx.strokeRect(Math.floor(videoWidth/2), 0, 15, videoHeight);*/
     let keypointPositions = {}
+    canvasOutputCtx.lineWidth = 2;
+    canvasOutputCtx.strokeStyle = 'rgba(0,0,255,0.6)'
     if(this.state.pose){
       let boxSize = 15
       this.state.pose.keypoints.forEach((keypoint,index)=>{
         if(keypoint.score > .35){
-
           keypointPositions[keypoint.part] = keypoint.position
-
           canvasOutputCtx.strokeRect(keypoint.position.x - boxSize/2 , keypoint.position.y - boxSize/2, boxSize, boxSize);
         }
       })
 
       this.drawCrossBodyLines(canvasOutputCtx, keypointPositions)
-    }
 
-    /*cv.subtract(tempMat, this.state.grayMat, tempMat)
+    }
+    this.drawGrid(canvasOutputCtx)
+
+   /* cv.subtract(tempMat, this.state.grayMat, tempMat)
     let canvasAsymCtx = this.canvasASym.getContext("2d")
     
     cv.imshow("canvasAsym", tempMat);
