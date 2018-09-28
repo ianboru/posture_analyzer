@@ -132,7 +132,7 @@ class App extends Component {
         let yTo = keypointPositions["right"+part].y
         const angle = this.getAngleDeg(xFrom,yFrom,xTo,yTo)
         const anglePercent = 100- 100*(Math.min(Math.abs(angle),10)/10)
-
+        
         var hue = Math.floor((100 - anglePercent) * 120 / 100);  // go from green to red
         var saturation = Math.abs(anglePercent - 50)/50; 
         context.strokeStyle = this.hslColPercent(anglePercent,0,120);
@@ -140,6 +140,11 @@ class App extends Component {
         context.moveTo(keypointPositions["left"+part].x,keypointPositions["left"+part].y)
         context.lineTo(keypointPositions["right"+part].x,keypointPositions["right"+part].y)
         context.stroke(); 
+        context.font="20px Verdana"
+        context.fillStyle = this.hslColPercent(anglePercent,0,120);
+
+        context.fillText(angle.toFixed(1) + String.fromCharCode(176),xFrom+15,Math.floor((yFrom+yTo)/2));
+
       }
     })
   }
@@ -254,18 +259,9 @@ class App extends Component {
     // schedule first one.
     return (
       <div className="App">
-        <header className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <h1 className="App-title">Welcome to React</h1>
-        </header>
-        <button  onClick={this.startCamera}>Start Video</button>
-
-        <p className="App-intro">
-          To get started, edit <code>src/App.js</code> and save to reload.
-        </p>
-       
+        <button  onClick={this.startCamera}>Start Video</button>      
          <div id="container">
-            <h3>OUTPUT</h3>
+            <h3>Fix your posture</h3>
             <video className="invisible" ref={ref => this.video = ref}></video>
 
             <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
