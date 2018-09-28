@@ -125,7 +125,7 @@ class App extends Component {
     context.lineWidth = 3;
 
     connectParts.forEach((part)=>{
-      if(keypointPositions["left"+part] && keypointPositions["right"+part] ){
+      if(keypointPositions["left"+part] && keypointPositions["right"+part]){
         let xFrom = keypointPositions["left"+part].x
         let yFrom = keypointPositions["left"+part].y
         let xTo = keypointPositions["right"+part].x
@@ -204,7 +204,8 @@ class App extends Component {
     if(this.state.pose){
       let boxSize = 15
       this.state.pose.keypoints.forEach((keypoint,index)=>{
-        if(keypoint.score > .35){
+        console.log(keypoint.part, keypoint.part.indexOf("nose") )
+        if(keypoint.score > .3 && keypoint.part.indexOf("nose") == -1){
           keypointPositions[keypoint.part] = keypoint.position
           canvasOutputCtx.strokeRect(keypoint.position.x - boxSize/2 , keypoint.position.y - boxSize/2, boxSize, boxSize);
         }
