@@ -8,12 +8,7 @@ import * as posenet from '@tensorflow-models/posenet';
 class App extends Component {
 
   state = {
-    canvasInput : null,
-    canvasInputCtx : null,
-    canvasBuffer: null,
-    canvasBufferCtx: null,
     canvasOutputCtx : null,
-    bufferContext : null,
     numFrames : 0,
     src : null,
     dst : null,
@@ -23,7 +18,6 @@ class App extends Component {
     videoHeight : null,
     videoWidth : null,
     srcMat : null,
-    grayMat : null,
     net : null,
     startTime : Date.now(),
   }
@@ -73,28 +67,13 @@ class App extends Component {
   startVideoProcessing=()=> {
     if (!this.state.streaming) { console.warn("Please startup your webcam"); return; }
     this.stopVideoProcessing();
-    let canvasInput = document.createElement('canvas');
-    canvasInput.width = this.state.videoWidth;
-    canvasInput.height = this.state.videoHeight;  
-    let canvasInputCtx = canvasInput.getContext('2d');
-    
-    let canvasBuffer = document.createElement('canvas');
-    canvasBuffer.width = this.state.videoWidth;
-    canvasBuffer.height = this.state.videoHeight;
-    let canvasBufferCtx = canvasBuffer.getContext('2d');
     let canvasOutputCtx = this.canvasOutput.getContext('2d');
     this.setState({
-      canvasInput,
-      canvasInputCtx,
-      canvasBuffer,
-      canvasBufferCtx,
       canvasOutputCtx
     })
     let srcMat = new cv.Mat(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC4);
-    let grayMat = new cv.Mat(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC1);
     this.setState({
-      srcMat,
-      grayMat
+      srcMat
     })
 
     requestAnimationFrame(this.processVideo);
@@ -140,7 +119,7 @@ class App extends Component {
         context.moveTo(keypointPositions["left"+part].x,keypointPositions["left"+part].y)
         context.lineTo(keypointPositions["right"+part].x,keypointPositions["right"+part].y)
         context.stroke(); 
-        context.font="20px Verdana"
+        context.font="25px Verdana"
         context.fillStyle = this.hslColPercent(anglePercent,0,120);
 
         context.fillText(angle.toFixed(1) + String.fromCharCode(176),xFrom+15,Math.floor((yFrom+yTo)/2));
@@ -198,6 +177,9 @@ class App extends Component {
     }
   }
   processVideo=()=> {
+    let canvasOutputCtx = this.canvasOutput.getContext("2d")
+    let videoWidth = this.state.videoWidth
+    let videoHeight = this.state.videoHeight
     if(this.state.net){
       var imageScaleFactor = 0.5;
       var outputStride = 16;
@@ -208,31 +190,18 @@ class App extends Component {
           })
         });
     }
-    let canvasInputCtx = this.state.canvasInputCtx
-    let canvasOutputCtx = this.canvasOutput.getContext("2d")
-
-    let videoWidth = this.state.videoWidth
-    let videoHeight = this.state.videoHeight
-
-    canvasInputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
-    let imageData = canvasInputCtx.getImageData(0, 0, videoWidth, videoHeight);
+    
+    canvasOutputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
+    let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
     this.state.srcMat.data.set(imageData.data);
-
     cv.flip(this.state.srcMat, this.state.srcMat,1)
-    cv.cvtColor(this.state.srcMat, this.state.grayMat, cv.COLOR_RGBA2GRAY);
-    cv.threshold(this.state.grayMat, this.state.grayMat, 100, 200, cv.THRESH_BINARY);
-    let tempMat = new cv.Mat(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC1);
-    //const bgSubtractor = new cv.BackgroundSubtractorMOG2()
-    //bgSubtractor.apply(tempMat, tempMat, .2)
-    //cv.flip(this.state.grayMat, tempMat,1)
-    //cv.subtract(tempMat, this.state.grayMat, tempMat)
-    //cv.flip(tempMat, tempMat,1)
     cv.imshow("canvasOutput", this.state.srcMat);
-    let keypointPositions = {}
-    canvasOutputCtx.lineWidth = 2;
+
+    canvasOutputCtx.lineWidth = 4;
     canvasOutputCtx.strokeStyle = 'rgba(0,0,255,0.6)'
+    let keypointPositions = {}
     if(this.state.pose){
-      let boxSize = 15
+      let boxSize = 20
       this.state.pose.keypoints.forEach((keypoint,index)=>{
         if(keypoint.score > .3 && keypoint.part.indexOf("nose") == -1 && keypoint.part.indexOf("Ear") == -1){
           keypointPositions[keypoint.part] = keypoint.position
@@ -243,6 +212,7 @@ class App extends Component {
       this.drawCrossBodyLines(canvasOutputCtx, keypointPositions)
 
     }
+
     this.drawGrid(canvasOutputCtx)
     var fps = 24;
     var interval = 1000/fps;
@@ -265,10 +235,6 @@ class App extends Component {
     this.setState({
       streaming :false,
     })
-    this.state.canvasOutputCtx.drawImage(
-      this.state.canvasInput, 0, 0, 
-      this.state.videoWidth, this.state.videoHeight
-    );
     
   }
   opencvIsReady=()=> {
