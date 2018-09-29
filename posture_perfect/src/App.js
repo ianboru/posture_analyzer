@@ -53,8 +53,6 @@ class App extends Component {
         that.video.setAttribute("height", videoHeight);
         that.canvasOutput.width = videoWidth;
         that.canvasOutput.height = videoHeight;
-        that.canvasSave.width = videoWidth;
-        that.canvasSave.height = videoHeight;
         that.setState({
           videoWidth,
           videoHeight
@@ -71,9 +69,6 @@ class App extends Component {
     var fps = 24;
     if (!this.state.streaming) { console.warn("Please startup your webcam"); return; }
     this.stopVideoProcessing();
-    this.setState({
-      savedStream : this.canvasSave.captureStream(vidLength*fps),
-    })
     let srcMat = new cv.Mat(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC4);
     this.setState({
       srcMat
@@ -141,7 +136,6 @@ class App extends Component {
         context.stroke(); 
         context.font="25px Verdana"
         context.fillStyle = this.hslColPercent(anglePercent,0,120);
-
         context.fillText(angle.toFixed(1) + String.fromCharCode(176),xFrom+15,Math.floor((yFrom+yTo)/2));
 
       }
@@ -195,17 +189,24 @@ class App extends Component {
       context.stroke(); 
     }
   }
-  replayVideo=()=>{
-    console.log("SAVED")
-    console.log(this.state.savedStream)
-    this.stopCamera()
-    this.savedVideo.srcObject = this.state.savedStream;
-    this.savedVideo.play();
-    let canvasSaveCtx = this.canvasSave.getContext("2d")
-    canvasSaveCtx.clearRect(0, 0,  this.canvasSave.width,  this.canvasSave.height);
-    canvasSaveCtx.drawImage(this.savedVideo, 0, 0, this.canvasSave.width, this.canvasSave.height);
+  drawFilteredContours=(src)=>{
+
+    let dst = cv.Mat.zeros(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC4);
+    cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
+    cv.threshold(src, src, 100, 200, cv.THRESH_BINARY);
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+    cv.findContours(src, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
+    for (let i = 0; i < contours.size(); ++i) {
+        let color = new cv.Scalar(0,0,255)
+        cv.drawContours(dst, contours, i, color, 2, cv.LINE_8, hierarchy, 200);
+    }
+    //src.delete(); dst.delete(); contours.delete(); hierarchy.delete();
+
+    return dst;
 
   }
+
   processVideo=()=> {
     let canvasOutputCtx = this.canvasOutput.getContext("2d")
     let videoWidth = this.state.videoWidth
@@ -220,12 +221,18 @@ class App extends Component {
           })
         });
     }
-    
+
     canvasOutputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
     let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
     this.state.srcMat.data.set(imageData.data);
     cv.flip(this.state.srcMat, this.state.srcMat,1)
-    cv.imshow("canvasOutput", this.state.srcMat);
+
+    let drawing = this.drawFilteredContours(this.state.srcMat.clone())
+    console.log(drawing, this.state.srcMat)
+    //cv.cvtColor(drawing, drawing, cv.COLOR_RGBA2GRAY, 0);
+    //cv.threshold(drawing, drawing, 120, 200, cv.THRESH_BINARY);
+    cv.add(this.state.srcMat,drawing,drawing)
+    cv.imshow('canvasOutput',drawing)
 
     canvasOutputCtx.lineWidth = 4;
     canvasOutputCtx.strokeStyle = 'rgba(0,0,255,0.6)'
@@ -244,16 +251,13 @@ class App extends Component {
 
     }
     this.drawGrid(canvasOutputCtx)
-    let canvasSaveCtx = this.canvasSave.getContext("2d")
-    if(canvasSaveCtx){
-      canvasSaveCtx.clearRect(0, 0,  this.canvasSave.width,  this.canvasSave.height);
-      canvasSaveCtx.drawImage(this.canvasOutput, 0, 0, this.canvasOutput.width, this.canvasOutput.height)
-    }
+
     var vidLength = 30 //seconds
     var fps = 24;
     var interval = 1000/fps;
     const delta = Date.now() - this.state.startTime;
     
+
     if (delta > interval) {
       requestAnimationFrame(this.processVideo);
       this.setState({
@@ -277,6 +281,7 @@ class App extends Component {
     console.log('OpenCV.js is ready');
     this.startCamera();
   }
+
   render() {
     return (
       <div className="App">
@@ -287,10 +292,6 @@ class App extends Component {
          <div id="container">
             <h3>Fix your posture</h3>
             <video className="invisible" ref={ref => this.video = ref}></video>
-            <video className="invisible" ref={ref => this.savedVideo = ref}></video>
-
-            <canvas ref={ref => this.canvasSave = ref}  className="center-block" id="canvasSave" width={320} height={240}></canvas>
-
             <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
           </div>
         </div>
