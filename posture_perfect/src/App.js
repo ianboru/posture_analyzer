@@ -98,12 +98,30 @@ class App extends Component {
     // Return a CSS HSL string
     return 'hsl('+c+', 100%, 50%)';
   }
+  connectConsecutiveParts=(context, keypointPositions, parts)=>{
+    parts.forEach((part, i)=>{
+      if(i < parts.length){
+        context.beginPath()
+        if(keypointPositions["left"+parts[i]] && keypointPositions["left"+parts[i+1]]){
+          context.moveTo(keypointPositions["left"+parts[i]].x,keypointPositions["left"+parts[i]].y)
+          context.lineTo(keypointPositions["left"+parts[i+1]].x,keypointPositions["left"+parts[i+1]].y)
+        }
+        if(keypointPositions["right"+parts[i]] && keypointPositions["right"+parts[i+1]]){
+          context.moveTo(keypointPositions["right"+parts[i]].x,keypointPositions["right"+parts[i]].y)
+          context.lineTo(keypointPositions["right"+parts[i+1]].x,keypointPositions["right"+parts[i+1]].y)
+        }
+      }
+      context.stroke(); 
+    })
+    
+
+  }
   drawCrossBodyLines = (context,keypointPositions)=>{
-    let connectParts = ["Ear","Hip","Shoulder","Eye"]
+    let connectHorizontalParts = ["Ear","Hip","Shoulder","Eye"]
     
     context.lineWidth = 3;
     let bodyAngles = {}
-    connectParts.forEach((part)=>{
+    connectHorizontalParts.forEach((part)=>{
       if(keypointPositions["left"+part] && keypointPositions["right"+part]){
         let xFrom = keypointPositions["left"+part].x
         let yFrom = keypointPositions["left"+part].y
@@ -126,16 +144,15 @@ class App extends Component {
 
       }
     })
+    let parts = ["Shoulder","Elbow", "Wrist"]
+    this.connectConsecutiveParts(context, keypointPositions, parts)
     if(
         keypointPositions["leftShoulder"] && 
         keypointPositions["rightShoulder"] && 
         keypointPositions["leftHip"] && 
         keypointPositions["rightHip"]
       ){
-      const aveBodyAngle = (bodyAngles["Eye"]+bodyAngles["Hip"])/2
-      context.font="20px Verdana"
-      context.strokeStyle = this.hslColPercent(aveBodyAngle,0,120);
-      context.fillStyle = this.hslColPercent(aveBodyAngle,0,120);
+      context.strokeStyle = 'rgba(0,255,0,0.5)';
 
       context.beginPath()
       context.moveTo(keypointPositions["leftShoulder"].x,keypointPositions["leftShoulder"].y)
@@ -144,15 +161,15 @@ class App extends Component {
       context.beginPath()
       context.moveTo(keypointPositions["rightShoulder"].x,keypointPositions["rightShoulder"].y)
       context.lineTo(keypointPositions["rightHip"].x, keypointPositions["rightHip"].y)
-      context.stroke(); 
-      /*context.beginPath()
+      context.stroke();
+      context.beginPath()
       context.moveTo(keypointPositions["leftShoulder"].x,keypointPositions["rightShoulder"].y)
       context.lineTo(keypointPositions["rightHip"].x, keypointPositions["leftHip"].y)
       context.stroke(); 
       context.beginPath()
       context.moveTo(keypointPositions["rightShoulder"].x,keypointPositions["leftShoulder"].y)
       context.lineTo(keypointPositions["leftHip"].x, keypointPositions["rightHip"].y)
-      context.stroke(); */
+      context.stroke(); 
       
     }
     
@@ -199,11 +216,12 @@ class App extends Component {
 
     canvasOutputCtx.lineWidth = 4;
     canvasOutputCtx.strokeStyle = 'rgba(0,0,255,0.6)'
+    const scoreThreshold = .35
     let keypointPositions = {}
     if(this.state.pose){
       let boxSize = 20
       this.state.pose.keypoints.forEach((keypoint,index)=>{
-        if(keypoint.score > .3 && keypoint.part.indexOf("nose") == -1 && keypoint.part.indexOf("Ear") == -1){
+        if(keypoint.score > scoreThreshold && keypoint.part.indexOf("nose") == -1 && keypoint.part.indexOf("Ear") == -1){
           keypointPositions[keypoint.part] = keypoint.position
           canvasOutputCtx.strokeRect(keypoint.position.x - boxSize/2 , keypoint.position.y - boxSize/2, boxSize, boxSize);
         }
@@ -212,12 +230,15 @@ class App extends Component {
       this.drawCrossBodyLines(canvasOutputCtx, keypointPositions)
 
     }
-
     this.drawGrid(canvasOutputCtx)
+
+    var vidLength = 30 //seconds
     var fps = 24;
     var interval = 1000/fps;
-    const delta = Date.now() - this.state.startTime;;
-      
+    const delta = Date.now() - this.state.startTime;
+    this.setState({
+      savedStream : this.canvasOutput.captureStream(vidLength*fps),
+    })
     if (delta > interval) {
       requestAnimationFrame(this.processVideo);
       this.setState({
