@@ -53,6 +53,8 @@ class App extends Component {
         that.video.setAttribute("height", videoHeight);
         that.canvasOutput.width = videoWidth;
         that.canvasOutput.height = videoHeight;
+        that.canvasSave.width = videoWidth;
+        that.canvasSave.height = videoHeight;
         that.setState({
           videoWidth,
           videoHeight
@@ -65,17 +67,17 @@ class App extends Component {
     }, false);
   }
   startVideoProcessing=()=> {
+    var vidLength = 30 //seconds
+    var fps = 24;
     if (!this.state.streaming) { console.warn("Please startup your webcam"); return; }
     this.stopVideoProcessing();
-    let canvasOutputCtx = this.canvasOutput.getContext('2d');
     this.setState({
-      canvasOutputCtx
+      savedStream : this.canvasSave.captureStream(vidLength*fps),
     })
     let srcMat = new cv.Mat(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC4);
     this.setState({
       srcMat
     })
-
     requestAnimationFrame(this.processVideo);
   }
 
@@ -193,6 +195,17 @@ class App extends Component {
       context.stroke(); 
     }
   }
+  replayVideo=()=>{
+    console.log("SAVED")
+    console.log(this.state.savedStream)
+    this.stopCamera()
+    this.savedVideo.srcObject = this.state.savedStream;
+    this.savedVideo.play();
+    let canvasSaveCtx = this.canvasSave.getContext("2d")
+    canvasSaveCtx.clearRect(0, 0,  this.canvasSave.width,  this.canvasSave.height);
+    canvasSaveCtx.drawImage(this.savedVideo, 0, 0, this.canvasSave.width, this.canvasSave.height);
+
+  }
   processVideo=()=> {
     let canvasOutputCtx = this.canvasOutput.getContext("2d")
     let videoWidth = this.state.videoWidth
@@ -231,14 +244,16 @@ class App extends Component {
 
     }
     this.drawGrid(canvasOutputCtx)
-
+    let canvasSaveCtx = this.canvasSave.getContext("2d")
+    if(canvasSaveCtx){
+      canvasSaveCtx.clearRect(0, 0,  this.canvasSave.width,  this.canvasSave.height);
+      canvasSaveCtx.drawImage(this.canvasOutput, 0, 0, this.canvasOutput.width, this.canvasOutput.height)
+    }
     var vidLength = 30 //seconds
     var fps = 24;
     var interval = 1000/fps;
     const delta = Date.now() - this.state.startTime;
-    this.setState({
-      savedStream : this.canvasOutput.captureStream(vidLength*fps),
-    })
+    
     if (delta > interval) {
       requestAnimationFrame(this.processVideo);
       this.setState({
@@ -267,10 +282,14 @@ class App extends Component {
       <div className="App">
         <button  onClick={this.startCamera}>Start Video</button> 
         <button  onClick={this.stopCamera}>Stop Video</button>      
-     
+        <button  onClick={this.replayVideo}>replay Video</button>      
+
          <div id="container">
             <h3>Fix your posture</h3>
             <video className="invisible" ref={ref => this.video = ref}></video>
+            <video className="invisible" ref={ref => this.savedVideo = ref}></video>
+
+            <canvas ref={ref => this.canvasSave = ref}  className="center-block" id="canvasSave" width={320} height={240}></canvas>
 
             <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
           </div>
