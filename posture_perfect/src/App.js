@@ -123,7 +123,7 @@ class App extends Component {
     let connectParts = ["Ear","Hip","Shoulder","Eye"]
     
     context.lineWidth = 3;
-
+    let bodyAngles = {}
     connectParts.forEach((part)=>{
       if(keypointPositions["left"+part] && keypointPositions["right"+part]){
         let xFrom = keypointPositions["left"+part].x
@@ -132,7 +132,7 @@ class App extends Component {
         let yTo = keypointPositions["right"+part].y
         const angle = this.getAngleDeg(xFrom,yFrom,xTo,yTo)
         const anglePercent = 100- 100*(Math.min(Math.abs(angle),10)/10)
-        
+        bodyAngles[part] = anglePercent
         var hue = Math.floor((100 - anglePercent) * 120 / 100);  // go from green to red
         var saturation = Math.abs(anglePercent - 50)/50; 
         context.strokeStyle = this.hslColPercent(anglePercent,0,120);
@@ -147,6 +147,37 @@ class App extends Component {
 
       }
     })
+    if(
+        keypointPositions["leftShoulder"] && 
+        keypointPositions["rightShoulder"] && 
+        keypointPositions["leftHip"] && 
+        keypointPositions["rightHip"]
+      ){
+      const aveBodyAngle = (bodyAngles["Eye"]+bodyAngles["Hip"])/2
+      context.font="20px Verdana"
+      context.strokeStyle = this.hslColPercent(aveBodyAngle,0,120);
+      context.fillStyle = this.hslColPercent(aveBodyAngle,0,120);
+
+      context.beginPath()
+      context.moveTo(keypointPositions["leftShoulder"].x,keypointPositions["leftShoulder"].y)
+      context.lineTo(keypointPositions["leftHip"].x, keypointPositions["leftHip"].y)
+      context.stroke(); 
+      context.beginPath()
+      context.moveTo(keypointPositions["rightShoulder"].x,keypointPositions["rightShoulder"].y)
+      context.lineTo(keypointPositions["rightHip"].x, keypointPositions["rightHip"].y)
+      context.stroke(); 
+      /*context.beginPath()
+      context.moveTo(keypointPositions["leftShoulder"].x,keypointPositions["rightShoulder"].y)
+      context.lineTo(keypointPositions["rightHip"].x, keypointPositions["leftHip"].y)
+      context.stroke(); 
+      context.beginPath()
+      context.moveTo(keypointPositions["rightShoulder"].x,keypointPositions["leftShoulder"].y)
+      context.lineTo(keypointPositions["leftHip"].x, keypointPositions["rightHip"].y)
+      context.stroke(); */
+      
+    }
+    
+
   }
   drawGrid = (context) =>{
     const gridSpacing = 40
@@ -190,22 +221,20 @@ class App extends Component {
     cv.flip(this.state.srcMat, this.state.srcMat,1)
     cv.cvtColor(this.state.srcMat, this.state.grayMat, cv.COLOR_RGBA2GRAY);
     cv.threshold(this.state.grayMat, this.state.grayMat, 100, 200, cv.THRESH_BINARY);
-    this.state.canvasOutputCtx.drawImage(this.state.canvasInput, 0, 0, videoWidth, videoHeight);
     let tempMat = new cv.Mat(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC1);
-    
-    cv.flip(this.state.grayMat, tempMat,1)
+    //const bgSubtractor = new cv.BackgroundSubtractorMOG2()
+    //bgSubtractor.apply(tempMat, tempMat, .2)
+    //cv.flip(this.state.grayMat, tempMat,1)
+    //cv.subtract(tempMat, this.state.grayMat, tempMat)
+    //cv.flip(tempMat, tempMat,1)
     cv.imshow("canvasOutput", this.state.srcMat);
-    /*
-    canvasOutputCtx.strokeStyle = 'rgba(0,255,0,0.5)';
-    canvasOutputCtx.strokeRect(Math.floor(videoWidth/2), 0, 15, videoHeight);*/
     let keypointPositions = {}
     canvasOutputCtx.lineWidth = 2;
     canvasOutputCtx.strokeStyle = 'rgba(0,0,255,0.6)'
     if(this.state.pose){
       let boxSize = 15
       this.state.pose.keypoints.forEach((keypoint,index)=>{
-        console.log(keypoint.part, keypoint.part.indexOf("nose") )
-        if(keypoint.score > .3 && keypoint.part.indexOf("nose") == -1){
+        if(keypoint.score > .3 && keypoint.part.indexOf("nose") == -1 && keypoint.part.indexOf("Ear") == -1){
           keypointPositions[keypoint.part] = keypoint.position
           canvasOutputCtx.strokeRect(keypoint.position.x - boxSize/2 , keypoint.position.y - boxSize/2, boxSize, boxSize);
         }
@@ -215,14 +244,6 @@ class App extends Component {
 
     }
     this.drawGrid(canvasOutputCtx)
-
-   /* cv.subtract(tempMat, this.state.grayMat, tempMat)
-    let canvasAsymCtx = this.canvasASym.getContext("2d")
-    
-    cv.imshow("canvasAsym", tempMat);
-    canvasAsymCtx.lineWidth = 6;
-    canvasAsymCtx.strokeStyle = 'rgba(0,255,0,0.5)';
-    canvasAsymCtx.strokeRect(Math.floor(videoWidth/2), 0, 15, videoHeight);*/
     var fps = 24;
     var interval = 1000/fps;
     const delta = Date.now() - this.state.startTime;;
@@ -255,23 +276,16 @@ class App extends Component {
     this.startCamera();
   }
   render() {
-    
-    
-    // schedule first one.
     return (
       <div className="App">
-        <button  onClick={this.startCamera}>Start Video</button>      
+        <button  onClick={this.startCamera}>Start Video</button> 
+        <button  onClick={this.stopCamera}>Stop Video</button>      
+     
          <div id="container">
             <h3>Fix your posture</h3>
             <video className="invisible" ref={ref => this.video = ref}></video>
 
             <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
-            ASYM
-            <canvas ref={ref => this.canvasASym = ref}  className="center-block" id="canvasAsym" width={320} height={240}></canvas>
-
-          </div>
-          <div className="invisible">
-            <video id="video" className="hidden">Your browser does not support the video tag.</video>
           </div>
         </div>
     );
