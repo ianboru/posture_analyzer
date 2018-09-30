@@ -195,13 +195,13 @@ class App extends Component {
 
     let dst = cv.Mat.zeros(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC4);
     cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
-    cv.threshold(src, src, 100, 200, cv.THRESH_BINARY);
+    cv.threshold(src, src, 90, 200, cv.THRESH_BINARY);
     let contours = new cv.MatVector();
     let hierarchy = new cv.Mat();
-    cv.findContours(src, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
+    cv.findContours(src, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_NONE);
     for (let i = 0; i < contours.size(); ++i) {
-        let color = new cv.Scalar(0,0,255)
-        cv.drawContours(dst, contours, i, color, 2, cv.LINE_8, hierarchy, 200);
+        let color = new cv.Scalar(150,150,150)
+        cv.drawContours(dst, contours, i, color, 4, cv.LINE_8, hierarchy, 200);
     }
     //src.delete(); dst.delete(); contours.delete(); hierarchy.delete();
 
@@ -213,24 +213,28 @@ class App extends Component {
     let videoHeight = this.state.videoHeight
   	let canvasOutputCtx = this.canvasOutput.getContext("2d")
 
-  	let currentTime = this.state.backgroundTimer
+ 
     let currentBackground = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
     
   	let interval = setInterval(()=>{
-  		currentTime -= 1
-  		if(currentTime <= 0){
-	  		canvasOutputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
-	    	let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
-	  		currentBackground.data.set(imageData.data);
-    		cv.flip(currentBackground, currentBackground,1)
+  		this.setState({
+	  		backgroundTimer : this.state.backgroundTimer - 1,
+	  	},()=>{
+	  		if(this.state.backgroundTimer <= 0){
+		  		canvasOutputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
+		    	let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
+		  		currentBackground.data.set(imageData.data);
+	    		cv.flip(currentBackground, currentBackground,1)
 
-	  		this.setState({
-	  			backgroundTimer : currentTime,
-	  			background : currentBackground.clone(),
-	  		},()=>{
-	  			clearInterval(interval)
-	  		})	
-  		}
+		  		this.setState({
+		  			backgroundTimer : 4,
+		  			background : currentBackground.clone(),
+		  		},()=>{
+		  			clearInterval(interval)
+		  		})	
+	  		}
+	  	})
+  		
   		
   	},1000)
   }
@@ -253,16 +257,29 @@ class App extends Component {
     let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
     this.state.srcMat.data.set(imageData.data);
     cv.flip(this.state.srcMat, this.state.srcMat,1)
-
-    let drawing = this.drawFilteredContours(this.state.srcMat.clone())
-    console.log(drawing, this.state.srcMat)
-    cv.add(this.state.srcMat,drawing,drawing)
+    
     if(this.state.background){
-    	cv.imshow('canvasOutput',drawing)
+    	let foregroundMat = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
+    	let drawingFlipMat = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
+    	let finalMat = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
+
+    	cv.subtract(this.state.srcMat, this.state.background, foregroundMat)
+    	let drawing = this.drawFilteredContours(foregroundMat.clone())
+	    cv.flip(drawing, drawingFlipMat,1)
+	    cv.subtract(drawingFlipMat,drawing, drawingFlipMat)
+	    cv.add(this.state.srcMat,drawingFlipMat,finalMat)
+    	cv.imshow('canvasOutput',finalMat)
+    	foregroundMat.delete()
+    	drawing.delete()
+    	drawingFlipMat.delete()
+
     }else{
     	cv.imshow('canvasOutput',this.state.srcMat)
     }
-
+ 	canvasOutputCtx.lineWidth = 6;
+    canvasOutputCtx.strokeStyle = 'rgba(255,255,255,0.7)';
+    canvasOutputCtx.strokeRect(Math.floor(videoWidth/2)-10, 0, 20, videoHeight);
+    
     canvasOutputCtx.lineWidth = 4;
     canvasOutputCtx.strokeStyle = 'rgba(0,0,255,0.6)'
     const scoreThreshold = .35
