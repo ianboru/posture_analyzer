@@ -22,6 +22,13 @@ class App extends Component {
     startTime : Date.now(),
     backgroundTimer: 4,
     background : null,
+    lh:5,
+    ls:5,
+    lv:5,
+    hh:30,
+    hs:30,
+    hv:30,
+    upsideDownMode:false,
   }
   componentDidMount=()=>{
     posenet.load().then(data=>{
@@ -191,23 +198,7 @@ class App extends Component {
       context.stroke(); 
     }
   }
-  drawFilteredContours=(src)=>{
-
-    let dst = cv.Mat.zeros(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC4);
-    cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
-    cv.threshold(src, src, 90, 200, cv.THRESH_BINARY);
-    let contours = new cv.MatVector();
-    let hierarchy = new cv.Mat();
-    cv.findContours(src, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_NONE);
-    for (let i = 0; i < contours.size(); ++i) {
-        let color = new cv.Scalar(150,150,150)
-        cv.drawContours(dst, contours, i, color, 4, cv.LINE_8, hierarchy, 200);
-    }
-    //src.delete(); dst.delete(); contours.delete(); hierarchy.delete();
-
-    return dst;
-
-  }
+  
   captureBackground =()=>{
   	let videoWidth = this.state.videoWidth
     let videoHeight = this.state.videoHeight
@@ -238,6 +229,24 @@ class App extends Component {
   		
   	},1000)
   }
+  drawFilteredContours=(src)=>{
+
+    let dst = cv.Mat.zeros(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC4);
+    cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
+    cv.threshold(src, src, 100, 255, cv.THRESH_BINARY_INV );//+ cv.THRESH_OTSU
+  
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+    cv.findContours(src, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_NONE);
+    for (let i = 0; i < contours.size(); ++i) {
+        let color = new cv.Scalar(150,0,0)
+        cv.drawContours(dst, contours, i, color, 4, cv.LINE_8, hierarchy, 200);
+    }
+    //src.delete(); dst.delete(); contours.delete(); hierarchy.delete();
+
+    return [dst,src];
+
+  }
   processVideo=()=> {
     let canvasOutputCtx = this.canvasOutput.getContext("2d")
     let videoWidth = this.state.videoWidth
@@ -257,17 +266,32 @@ class App extends Component {
     let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
     this.state.srcMat.data.set(imageData.data);
     cv.flip(this.state.srcMat, this.state.srcMat,1)
+    let dst = new cv.Mat();
+    let low = new cv.Mat(this.state.srcMat.rows, this.state.srcMat.cols, this.state.srcMat.type(), [this.state.lh, this.state.ls, this.state.lv, 0]);
+    let high = new cv.Mat(this.state.srcMat.rows, this.state.srcMat.cols, this.state.srcMat.type(), [this.state.hh, this.state.hs, this.state.hv, 255]);
+    // You can try more different parameters
+   /* cv.inRange(this.state.srcMat, low, high, dst);
+    let M = cv.Mat.ones(2, 2, cv.CV_8U);
+    cv.erode(dst, dst, M);
+    cv.dilate(dst, dst, M);
+    cv.dilate(dst, dst, M, new cv.Point(-1, -1), 3);
     
+    cv.imshow('canvasOutput',dst)
+    low.delete()
+    high.delete()*/
     if(this.state.background){
     	let foregroundMat = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
     	let drawingFlipMat = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
     	let finalMat = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
 
-    	cv.subtract(this.state.srcMat, this.state.background, foregroundMat)
-    	let drawing = this.drawFilteredContours(foregroundMat.clone())
+    	cv.subtract(this.state.background,this.state.srcMat , foregroundMat)
+
+    	let contourData = this.drawFilteredContours(this.state.srcMat.clone())
+	    let drawing = contourData[0]
 	    cv.flip(drawing, drawingFlipMat,1)
 	    cv.subtract(drawingFlipMat,drawing, drawingFlipMat)
-	    cv.add(this.state.srcMat,drawingFlipMat,finalMat)
+
+	    cv.add(this.state.srcMat,foregroundMat,finalMat)
     	cv.imshow('canvasOutput',finalMat)
     	foregroundMat.delete()
     	drawing.delete()
@@ -276,7 +300,7 @@ class App extends Component {
     }else{
     	cv.imshow('canvasOutput',this.state.srcMat)
     }
- 	canvasOutputCtx.lineWidth = 6;
+ 	  canvasOutputCtx.lineWidth = 6;
     canvasOutputCtx.strokeStyle = 'rgba(255,255,255,0.7)';
     canvasOutputCtx.strokeRect(Math.floor(videoWidth/2)-10, 0, 20, videoHeight);
     
@@ -327,16 +351,62 @@ class App extends Component {
     console.log('OpenCV.js is ready');
     this.startCamera();
   }
-
+  handleLHChange=(e)=>{
+  	this.setState({
+  		lh : parseInt(e.target.value)
+  	})
+  }
+  handleLSChange=(e)=>{
+  	this.setState({
+  		ls : parseInt(e.target.value)
+  	})
+  }
+  handleLVChange=(e)=>{
+  	this.setState({
+  		lv : parseInt(e.target.value)
+  	})
+  }
+  
+  handleHHChange=(e)=>{
+    this.setState({
+      hh : parseInt(e.target.value)
+    })
+  }
+  handleHSChange=(e)=>{
+    this.setState({
+      hs : parseInt(e.target.value)
+    })
+  }
+  handleHVChange=(e)=>{
+    this.setState({
+      hv : parseInt(e.target.value)
+    })
+  }
+  handleUpsideDown=()=>{
+    this.setState({
+      upsideDownMode : !this.state.upsideDownMode
+    })
+  }
   render() {
+  	
     return (
       <div className="App">
         <button  onClick={this.startCamera}>Start Video</button> 
         <button  onClick={this.stopCamera}>Stop Video</button>      
         <button  onClick={this.captureBackground}>Set Background</button>      
+        <button  onClick={this.handleUpsideDown}>Upside down mode</button>      
 
          <div id="container">
             <h3>Fix your posture</h3>
+            <div className="sliders">
+
+              <input type="range" min={0} max={255} value={this.state.lh} onChange={this.handleLHChange}/>
+             	<input type="range" min={0} max={255} value={this.state.ls} onChange={this.handleLSChange}/>
+             	<input type="range" min={0} max={255} value={this.state.lv} onChange={this.handleLVChange}/>
+              <input type="range" min={0} max={255} value={this.state.hh} onChange={this.handleHHChange}/>
+              <input type="range" min={0} max={255} value={this.state.hs} onChange={this.handleHSChange}/>
+              <input type="range" min={0} max={255} value={this.state.hv} onChange={this.handleHVChange}/>
+            </div>
             <p>{this.state.backgroundTimer}</p>
             <video className="invisible" ref={ref => this.video = ref}></video>
             <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
