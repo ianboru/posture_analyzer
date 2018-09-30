@@ -105,20 +105,19 @@ class App extends Component {
     return 'hsl('+c+', 100%, 50%)';
   }
   connectConsecutiveParts=(context, keypointPositions, parts)=>{
-    parts.forEach((part, i)=>{
-      if(i < parts.length){
-        context.beginPath()
-        if(keypointPositions["left"+parts[i]] && keypointPositions["left"+parts[i+1]]){
-          context.moveTo(keypointPositions["left"+parts[i]].x,keypointPositions["left"+parts[i]].y)
-          context.lineTo(keypointPositions["left"+parts[i+1]].x,keypointPositions["left"+parts[i+1]].y)
+    ["left","right"].forEach((side)=>{
+      parts.forEach((part, i)=>{
+        if(i < parts.length){
+          context.beginPath()
+          if(keypointPositions[side+parts[i]] && keypointPositions[side+parts[i+1]]){
+              context.moveTo(keypointPositions[side+parts[i]].x,keypointPositions[side+parts[i]].y)
+              context.lineTo(keypointPositions[side+parts[i+1]].x,keypointPositions[side+parts[i+1]].y)
+          }
         }
-        if(keypointPositions["right"+parts[i]] && keypointPositions["right"+parts[i+1]]){
-          context.moveTo(keypointPositions["right"+parts[i]].x,keypointPositions["right"+parts[i]].y)
-          context.lineTo(keypointPositions["right"+parts[i+1]].x,keypointPositions["right"+parts[i+1]].y)
-        }
-      }
-      context.stroke(); 
+        context.stroke(); 
+      })
     })
+    
     
 
   }
@@ -145,11 +144,13 @@ class App extends Component {
         context.stroke(); 
         context.font="25px Verdana"
         context.fillStyle = this.hslColPercent(anglePercent,0,120);
-        context.fillText(angle.toFixed(1) + String.fromCharCode(176),xFrom+15,Math.floor((yFrom+yTo)/2));
+        //context.fillText(angle.toFixed(1) + String.fromCharCode(176),xFrom+15,Math.floor((yFrom+yTo)/2));
 
       }
     })
     let parts = ["Shoulder","Elbow", "Wrist"]
+    this.connectConsecutiveParts(context, keypointPositions, parts)
+    parts = ["Hip","Knee", "Ankle"]
     this.connectConsecutiveParts(context, keypointPositions, parts)
     if(
         keypointPositions["leftShoulder"] && 
@@ -244,33 +245,97 @@ class App extends Component {
     }
     //src.delete(); dst.delete(); contours.delete(); hierarchy.delete();
 
-    return [dst,src];
+    return dst;
 
+  }
+  addCenterLine = (context)=>{
+    context.lineWidth = 6;
+    context.strokeStyle = 'rgba(255,255,255,0.7)';
+    context.strokeRect(Math.floor(this.state.videoWidth/2)-10, 0, 20, this.state.videoHeight);
+    
+  }
+  filterOverlappingKeypoints=(keypointPositions, keypointScores)=>{
+    let filteredKeypoints = {}
+    for(let curKeypoint in keypointPositions){
+      let curPosition = keypointPositions[curKeypoint]
+      for(let otherKeypoint in keypointPositions){
+        let otherPosition = keypointPositions[otherKeypoint]
+        if(curKeypoint != otherKeypoint){
+          const distance = 
+          Math.pow(
+            Math.pow(curPosition.x - otherPosition.x,2) + 
+            Math.pow(curPosition.y - otherPosition.y,2) 
+          ,.5)
+          if(curKeypoint == "leftWrist" && otherKeypoint == "rightWrist"){
+            console.log(distance)
+
+          }
+          if(distance < 30 && filteredKeypoints[curKeypoint]){
+            delete filteredKeypoints[curKeypoint]
+            continue
+          }else{
+            filteredKeypoints[curKeypoint] = keypointPositions[curKeypoint]
+          }
+        } 
+      }
+    }
+    return filteredKeypoints
+  }
+  addPoseData = (context,poseData)=>{
+    context.lineWidth = 4;
+    context.strokeStyle = 'rgba(0,0,255,0.6)'
+    const scoreThreshold = .15
+    let keypointPositions = {}
+    let keypointScores = {}
+    if(this.state.pose){
+      let boxSize = 20
+      this.state.pose.keypoints.forEach((keypoint)=>{
+        if(keypoint.score > scoreThreshold && keypoint.part.indexOf("nose") == -1 && keypoint.part.indexOf("Ear") == -1){
+          if(this.state.upsideDownMode){
+            keypoint.position.x = keypoint.position.x - 2*(keypoint.position.x -this.state.videoWidth/2)
+
+          }
+          keypointPositions[keypoint.part] = keypoint.position
+          keypointScores[keypoint.part] = keypoint.score
+          context.strokeRect(keypoint.position.x - boxSize/2 , keypoint.position.y - boxSize/2, boxSize, boxSize);
+        }
+      })
+      //keypointPositions = this.filterOverlappingKeypoints(keypointPositions, keypointScores)
+      this.drawCrossBodyLines(context, keypointPositions)
+    }
   }
   processVideo=()=> {
     let canvasOutputCtx = this.canvasOutput.getContext("2d")
     let videoWidth = this.state.videoWidth
     let videoHeight = this.state.videoHeight
+    let reflectedMat 
+    canvasOutputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
+    let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
+    this.state.srcMat.data.set(imageData.data);
+    cv.flip(this.state.srcMat, this.state.srcMat,1)
+
+    if(this.state.upsideDownMode){  
+      reflectedMat = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
+      cv.flip(this.state.srcMat, reflectedMat,0)
+      cv.imshow('canvasOutput',reflectedMat)
+    }
+    let poseData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
     if(this.state.net){
-      var imageScaleFactor = 0.5;
-      var outputStride = 16;
+      var imageScaleFactor = .5;
+      var outputStride = 32;
       var flipHorizontal = true;
-        this.state.net.estimateSinglePose(this.video,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
+        this.state.net.estimateSinglePose(poseData,imageScaleFactor, flipHorizontal, outputStride).then(pose=>{
           this.setState({
             pose
           })
         });
     }
-
-    canvasOutputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
-    let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
-    this.state.srcMat.data.set(imageData.data);
-    cv.flip(this.state.srcMat, this.state.srcMat,1)
+    /*
     let dst = new cv.Mat();
     let low = new cv.Mat(this.state.srcMat.rows, this.state.srcMat.cols, this.state.srcMat.type(), [this.state.lh, this.state.ls, this.state.lv, 0]);
     let high = new cv.Mat(this.state.srcMat.rows, this.state.srcMat.cols, this.state.srcMat.type(), [this.state.hh, this.state.hs, this.state.hv, 255]);
     // You can try more different parameters
-   /* cv.inRange(this.state.srcMat, low, high, dst);
+    cv.inRange(this.state.srcMat, low, high, dst);
     let M = cv.Mat.ones(2, 2, cv.CV_8U);
     cv.erode(dst, dst, M);
     cv.dilate(dst, dst, M);
@@ -286,42 +351,34 @@ class App extends Component {
 
     	cv.subtract(this.state.background,this.state.srcMat , foregroundMat)
 
-    	let contourData = this.drawFilteredContours(this.state.srcMat.clone())
-	    let drawing = contourData[0]
+    	let drawing = this.drawFilteredContours(this.state.srcMat.clone())
 	    cv.flip(drawing, drawingFlipMat,1)
 	    cv.subtract(drawingFlipMat,drawing, drawingFlipMat)
-
 	    cv.add(this.state.srcMat,foregroundMat,finalMat)
     	cv.imshow('canvasOutput',finalMat)
     	foregroundMat.delete()
     	drawing.delete()
     	drawingFlipMat.delete()
-
+      finalMat.delete()
     }else{
-    	cv.imshow('canvasOutput',this.state.srcMat)
+      if(!this.state.upsideDownMode){
+        cv.imshow('canvasOutput',this.state.srcMat)
+        
+      }
     }
- 	  canvasOutputCtx.lineWidth = 6;
-    canvasOutputCtx.strokeStyle = 'rgba(255,255,255,0.7)';
-    canvasOutputCtx.strokeRect(Math.floor(videoWidth/2)-10, 0, 20, videoHeight);
     
-    canvasOutputCtx.lineWidth = 4;
-    canvasOutputCtx.strokeStyle = 'rgba(0,0,255,0.6)'
-    const scoreThreshold = .35
-    let keypointPositions = {}
-    if(this.state.pose){
-      let boxSize = 20
-      this.state.pose.keypoints.forEach((keypoint,index)=>{
-        if(keypoint.score > scoreThreshold && keypoint.part.indexOf("nose") == -1 && keypoint.part.indexOf("Ear") == -1){
-          keypointPositions[keypoint.part] = keypoint.position
-          canvasOutputCtx.strokeRect(keypoint.position.x - boxSize/2 , keypoint.position.y - boxSize/2, boxSize, boxSize);
-        }
-      })
-
-      this.drawCrossBodyLines(canvasOutputCtx, keypointPositions)
+ 	  //this.addCenterLine(canvasOutputCtx)
+    this.addPoseData(canvasOutputCtx, this.state.pose)
+    
+    this.drawGrid(canvasOutputCtx)
+    if(this.state.upsideDownMode){
+      imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
+      reflectedMat.data.set(imageData.data);
+      cv.flip(reflectedMat, reflectedMat,0)
+      cv.imshow('canvasOutput',reflectedMat)
+      reflectedMat.delete()
 
     }
-    this.drawGrid(canvasOutputCtx)
-
     var vidLength = 30 //seconds
     var fps = 24;
     var interval = 1000/fps;
