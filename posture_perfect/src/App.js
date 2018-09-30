@@ -20,6 +20,8 @@ class App extends Component {
     srcMat : null,
     net : null,
     startTime : Date.now(),
+    backgroundTimer: 4,
+    background : null,
   }
   componentDidMount=()=>{
     posenet.load().then(data=>{
@@ -206,7 +208,32 @@ class App extends Component {
     return dst;
 
   }
+  captureBackground =()=>{
+  	let videoWidth = this.state.videoWidth
+    let videoHeight = this.state.videoHeight
+  	let canvasOutputCtx = this.canvasOutput.getContext("2d")
 
+  	let currentTime = this.state.backgroundTimer
+    let currentBackground = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
+    
+  	let interval = setInterval(()=>{
+  		currentTime -= 1
+  		if(currentTime <= 0){
+	  		canvasOutputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
+	    	let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
+	  		currentBackground.data.set(imageData.data);
+    		cv.flip(currentBackground, currentBackground,1)
+
+	  		this.setState({
+	  			backgroundTimer : currentTime,
+	  			background : currentBackground.clone(),
+	  		},()=>{
+	  			clearInterval(interval)
+	  		})	
+  		}
+  		
+  	},1000)
+  }
   processVideo=()=> {
     let canvasOutputCtx = this.canvasOutput.getContext("2d")
     let videoWidth = this.state.videoWidth
@@ -229,10 +256,12 @@ class App extends Component {
 
     let drawing = this.drawFilteredContours(this.state.srcMat.clone())
     console.log(drawing, this.state.srcMat)
-    //cv.cvtColor(drawing, drawing, cv.COLOR_RGBA2GRAY, 0);
-    //cv.threshold(drawing, drawing, 120, 200, cv.THRESH_BINARY);
     cv.add(this.state.srcMat,drawing,drawing)
-    cv.imshow('canvasOutput',drawing)
+    if(this.state.background){
+    	cv.imshow('canvasOutput',drawing)
+    }else{
+    	cv.imshow('canvasOutput',this.state.srcMat)
+    }
 
     canvasOutputCtx.lineWidth = 4;
     canvasOutputCtx.strokeStyle = 'rgba(0,0,255,0.6)'
@@ -287,10 +316,11 @@ class App extends Component {
       <div className="App">
         <button  onClick={this.startCamera}>Start Video</button> 
         <button  onClick={this.stopCamera}>Stop Video</button>      
-        <button  onClick={this.replayVideo}>replay Video</button>      
+        <button  onClick={this.captureBackground}>Set Background</button>      
 
          <div id="container">
             <h3>Fix your posture</h3>
+            <p>{this.state.backgroundTimer}</p>
             <video className="invisible" ref={ref => this.video = ref}></video>
             <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
           </div>

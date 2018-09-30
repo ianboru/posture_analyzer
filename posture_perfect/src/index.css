@@ -23,6 +23,9 @@ div {
   display: block;
   margin: auto;
 }
+p{
+  font-size: 25pt;
+}
 label {
   padding-right: 10px;
   width: 25%;
