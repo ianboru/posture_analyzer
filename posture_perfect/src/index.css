@@ -3,36 +3,3 @@ body {
   padding: 0;
   font-family: sans-serif;
 }
-canvas {
-  border: 1px solid black;
-  display: inline-block;
-  position : fixed;
-  right : 0;
-  width : 550px;
-}
-p{
-  margin-top: 100px;
-  margin-bottom: 150px;
-  font-size: 30px;
-}
-video {
-	display: inline-block;
-}
-.invisible {
-  display: none;
-}
-.text-center {
-  text-align: center;
-}
-div {
-  margin: 10px;
-  height : 400px;
-}
-.center-block {
-}
-label {
-  padding-right: 10px;
-  width: 25%;
-  vertical-align: top;
-  font: 16px 'Lucida Grande', sans-serif;
-}

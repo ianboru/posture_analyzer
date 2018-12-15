@@ -25,6 +25,11 @@ class App extends Component {
     lastEyeHeight : null,
     scrollX : null,
     scrollY : null,
+    collectingData : false,
+    targetX : null,
+    targetY : null,
+    targetData : [],
+    numLoops : 0,
   }
   componentDidMount=()=>{
     const targetSize = 20
@@ -36,21 +41,40 @@ class App extends Component {
        this.setState({
           net : data
         })
-
+        this.startCamera();
     });
     console.log("mounted")
+    
+    const totalTime = 2000
+    const waitTime = 1500
+    const collectTime = 500
     setInterval(()=>{
-      console.log("next loop")
-      const y = Math.floor(Math.random() * window.innerHeight)
+      const y = Math.floor(Math.random() * (window.innerHeight-targetSize))
 
-      const x =  Math.floor(Math.random() * window.innerWidth)
-      console.log("x,y" , x,y)
+      const x =  Math.floor(Math.random() * (window.innerWidth-targetSize))
       let domElement = document.getElementById("lookHere")
       domElement.style.position = "absolute";
-      domElement.style.top = y-targetSize + "px"; //or whatever 
-      domElement.style.left = x-targetSize + "px";
-      console.log(domElement)
-    }, 2000)
+      domElement.style.top = y + "px"; //or whatever 
+      domElement.style.left = x + "px";
+      //console.log(x,y, window.innerHeight)
+      setTimeout(()=>{
+        this.setState({
+          numLoops : this.state.numLoops + 1
+        })
+        document.getElementById("text").innerHTML = "collecting"
+        this.setState({
+          collectingData : true,
+          targetX : x+targetSize/2,
+          targetY : y+targetSize/2,
+        })
+        setTimeout(()=>{
+          document.getElementById("text").innerHTML = "waiting"
+          this.setState({
+            collectingData : false,
+          })
+        }, collectTime)
+      }, waitTime)
+    }, totalTime)
   }
   startCamera=()=> {
     let that = this
@@ -74,8 +98,8 @@ class App extends Component {
         let videoHeight = that.video.videoHeight;
         that.video.setAttribute("width", videoWidth);
         that.video.setAttribute("height", videoHeight);
-        that.canvasOutput.width = videoWidth;
-        that.canvasOutput.height = videoHeight;
+        //that.canvasOutput.width = videoWidth;
+        //that.canvasOutput.height = videoHeight;
         that.setState({
           videoWidth,
           videoHeight
@@ -92,10 +116,7 @@ class App extends Component {
     if (!this.state.streaming) { console.warn("Please startup your webcam"); return; }
     
     this.stopVideoProcessing();
-    let canvasOutputCtx = this.canvasOutput.getContext('2d');
-    this.setState({
-      canvasOutputCtx
-    })
+
     let srcMat = new cv.Mat(this.state.videoHeight, this.state.videoWidth, cv.CV_8UC4);
     this.setState({
       srcMat
@@ -123,105 +144,12 @@ class App extends Component {
     // Return a CSS HSL string
     return 'hsl('+c+', 100%, 50%)';
   }
-  connectConsecutiveParts=(context, keypointPositions, parts)=>{
-    parts.forEach((part, i)=>{
-      if(i < parts.length){
-        context.beginPath()
-        if(keypointPositions["left"+parts[i]] && keypointPositions["left"+parts[i+1]]){
-          context.moveTo(keypointPositions["left"+parts[i]].x,keypointPositions["left"+parts[i]].y)
-          context.lineTo(keypointPositions["left"+parts[i+1]].x,keypointPositions["left"+parts[i+1]].y)
-        }
-        if(keypointPositions["right"+parts[i]] && keypointPositions["right"+parts[i+1]]){
-          context.moveTo(keypointPositions["right"+parts[i]].x,keypointPositions["right"+parts[i]].y)
-          context.lineTo(keypointPositions["right"+parts[i+1]].x,keypointPositions["right"+parts[i+1]].y)
-        }
-      }
-      context.stroke(); 
-    })
-    
-
-  }
-  drawCrossBodyLines = (context,keypointPositions)=>{
-    let connectHorizontalParts = ["Ear","Hip","Shoulder","Eye"]
-    
-    context.lineWidth = 3;
-    let bodyAngles = {}
-    connectHorizontalParts.forEach((part)=>{
-      if(keypointPositions["left"+part] && keypointPositions["right"+part]){
-        let xFrom = keypointPositions["left"+part].x
-        let yFrom = keypointPositions["left"+part].y
-        let xTo = keypointPositions["right"+part].x
-        let yTo = keypointPositions["right"+part].y
-        const angle = this.getAngleDeg(xFrom,yFrom,xTo,yTo)
-        const anglePercent = 100- 100*(Math.min(Math.abs(angle),10)/10)
-        bodyAngles[part] = anglePercent
-        var hue = Math.floor((100 - anglePercent) * 120 / 100);  // go from green to red
-        var saturation = Math.abs(anglePercent - 50)/50; 
-        context.strokeStyle = this.hslColPercent(anglePercent,0,120);
-        context.beginPath()
-        context.moveTo(keypointPositions["left"+part].x,keypointPositions["left"+part].y)
-        context.lineTo(keypointPositions["right"+part].x,keypointPositions["right"+part].y)
-        context.stroke(); 
-        context.font="25px Verdana"
-        context.fillStyle = this.hslColPercent(anglePercent,0,120);
-
-        context.fillText(angle.toFixed(1) + String.fromCharCode(176),xFrom+15,Math.floor((yFrom+yTo)/2));
-
-      }
-    })
-    let parts = ["Shoulder","Elbow", "Wrist"]
-    this.connectConsecutiveParts(context, keypointPositions, parts)
-    if(
-        keypointPositions["leftShoulder"] && 
-        keypointPositions["rightShoulder"] && 
-        keypointPositions["leftHip"] && 
-        keypointPositions["rightHip"]
-      ){
-      context.strokeStyle = 'rgba(0,255,0,0.5)';
-
-      context.beginPath()
-      context.moveTo(keypointPositions["leftShoulder"].x,keypointPositions["leftShoulder"].y)
-      context.lineTo(keypointPositions["leftHip"].x, keypointPositions["leftHip"].y)
-      context.stroke(); 
-      context.beginPath()
-      context.moveTo(keypointPositions["rightShoulder"].x,keypointPositions["rightShoulder"].y)
-      context.lineTo(keypointPositions["rightHip"].x, keypointPositions["rightHip"].y)
-      context.stroke();
-      context.beginPath()
-      context.moveTo(keypointPositions["leftShoulder"].x,keypointPositions["rightShoulder"].y)
-      context.lineTo(keypointPositions["rightHip"].x, keypointPositions["leftHip"].y)
-      context.stroke(); 
-      context.beginPath()
-      context.moveTo(keypointPositions["rightShoulder"].x,keypointPositions["leftShoulder"].y)
-      context.lineTo(keypointPositions["leftHip"].x, keypointPositions["rightHip"].y)
-      context.stroke(); 
-      
-    }
-    
-
-  }
-  drawGrid = (context) =>{
-    const gridSpacing = 40
-    context.lineWidth = 2;
-    context.strokeStyle = 'rgba(255,255,255,0.2)';
-    
-    for (let i = 0; i < Math.floor(this.state.videoWidth/gridSpacing);i++){
-      context.beginPath()
-      context.moveTo(40*(i-1),0)
-      context.lineTo(40*(i-1),this.state.videoHeight)
-      context.stroke(); 
-    }
-    for (let i = 0; i < Math.floor(this.state.videoHeight/gridSpacing);i++ ){
-      context.beginPath()
-      context.moveTo(0,40*(i-1))
-      context.lineTo(this.state.videoWidth,40*(i-1))
-      context.stroke(); 
-    }
-  }
+  
   processVideo=()=> {
-    let canvasOutputCtx = this.canvasOutput.getContext("2d")
     let videoWidth = this.state.videoWidth
     let videoHeight = this.state.videoHeight
+    
+    //console.log(this.state.numLoops)
     if(this.state.net){
       var imageScaleFactor = 0.5;
       var outputStride = 16;
@@ -230,57 +158,36 @@ class App extends Component {
           this.setState({
             pose
           })
+          if(this.state.collectingData){
+            this.state.targetData.push([
+              pose.keypoints[0].position.x,
+              pose.keypoints[0].position.y,
+              pose.keypoints[1].position.x,
+              pose.keypoints[1].position.y,
+              pose.keypoints[2].position.x,
+              pose.keypoints[2].position.y,
+              pose.keypoints[3].position.x,
+              pose.keypoints[3].position.y,
+              pose.keypoints[4].position.x,
+              pose.keypoints[4].position.y,
+              this.state.targetX,
+              this.state.targetY
+            ])
+            if(this.state.numLoops % 5 == 0 ){
+              console.log(this.state.numLoops)
+              console.log(this.state.targetData)
+            }
+          }
         });
     }
     
-    canvasOutputCtx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
-    let imageData = canvasOutputCtx.getImageData(0, 0, videoWidth, videoHeight);
-    this.state.srcMat.data.set(imageData.data);
-    cv.flip(this.state.srcMat, this.state.srcMat,1)
-    cv.imshow("canvasOutput", this.state.srcMat);
-
-    canvasOutputCtx.lineWidth = 4;
-    canvasOutputCtx.strokeStyle = 'rgba(0,0,255,0.6)'
-    const scoreThreshold = .35
-    let keypointPositions = {}
-    if(this.state.pose){
-      let boxSize = 20
-      this.state.pose.keypoints.forEach((keypoint,index)=>{
-        if(keypoint.score > scoreThreshold && keypoint.part.indexOf("nose") == -1 && keypoint.part.indexOf("Ear") == -1){
-          keypointPositions[keypoint.part] = keypoint.position
-          canvasOutputCtx.strokeRect(keypoint.position.x - boxSize/2 , keypoint.position.y - boxSize/2, boxSize, boxSize);
-        }
-
-        if(keypoint.part == "leftEye"){
-          let currentEyeHeight = keypoint.position.y
-           if(!this.state.lastEyeHeight){
-              this.setState({
-                  lastEyeHeight : currentEyeHeight
-                })
-            }
-          const heightDiff = currentEyeHeight - this.state.lastEyeHeight
-          if(heightDiff > 0){
-            window.scrollBy(0, heightDiff*4 )
-          }else{
-            window.scrollBy(0, heightDiff*6 )
-          }
-           
-           this.drawCrossBodyLines(canvasOutputCtx, keypointPositions)
-           console.log("left eye", keypoint.position.x, keypoint.position.y )
-        }
-        
-      })
-
-    }
-    this.drawGrid(canvasOutputCtx)
+   
 
     var vidLength = 30 //seconds
     var fps = 24;
     var interval = 1000/fps;
     const delta = Date.now() - this.state.startTime;
-    this.setState({
-      savedStream : this.canvasOutput.captureStream(vidLength*fps),
-    })
+    
     if (delta > interval) {
       requestAnimationFrame(this.processVideo);
       this.setState({
@@ -304,6 +211,7 @@ class App extends Component {
     console.log('OpenCV.js is ready');
     this.startCamera();
   }
+//            <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
 
   render() {
     return (
@@ -311,9 +219,8 @@ class App extends Component {
         
         <div id="lookHere"></div>
         <div id="container">
-            <h3>Fix your posture</h3>
-            <video className="invisible" ref={ref => this.video = ref}></video>
-            <canvas ref={ref => this.canvasOutput = ref}  className="center-block" id="canvasOutput" width={320} height={240}></canvas>
+            <h3 id="text">Waiting</h3>
+            <video style={{display: "none"}} className="invisible" ref={ref => this.video = ref}></video>
         </div>
       </div>
     );
